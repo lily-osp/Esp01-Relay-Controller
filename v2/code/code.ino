@@ -36,7 +36,7 @@ struct DeviceConfig {
 #define RELAY_PIN 0
 #define LED_PIN 1
 #define CONFIG_ADDRESS 0
-#define AP_SSID "ESP8266-Setup"
+#define AP_SSID "ESP8266-Setup" 
 #define AP_PASSWORD "configme123"
 const byte DNS_PORT = 53;
 
