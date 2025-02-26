@@ -3,7 +3,7 @@ const char WEB_UI[] PROGMEM = R"rawliteral(
 <!DOCTYPE html>
 <html>
 <head>
-  <title>Valve Control</title>
+  <title>Relay Control</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <style>
     :root {
@@ -11,7 +11,7 @@ const char WEB_UI[] PROGMEM = R"rawliteral(
       --success-color: #4caf50;
       --danger-color: #f44336;
       --background-color: #121212;
-      --card-background: #1a1a1a;
+      --card-background: #1e1e1e;
       --text-primary: #ffffff;
       --text-secondary: #888888;
     }
@@ -52,10 +52,10 @@ const char WEB_UI[] PROGMEM = R"rawliteral(
       justify-content: center;
     }
 
-    .valve-container {
+    .relay-container {
       position: relative;
       width: 100%;
-      max-width: 400px;
+      max-width: 600px;
       margin: 0 auto;
       padding: clamp(1rem, 3vw, 2rem);
       background: var(--card-background);
@@ -63,84 +63,57 @@ const char WEB_UI[] PROGMEM = R"rawliteral(
       box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
     }
 
-    .pipe {
-      width: 100%;
-      height: clamp(15px, 3vw, 20px);
-      background: #333;
-      margin: 10px 0;
+    .relay-section {
+      margin-bottom: 1.5rem;
+      padding: 1rem;
+      background: #2a2a2a;
       border-radius: 10px;
-      position: relative;
-      overflow: hidden;
+      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
     }
 
-    .water-flow {
-      position: absolute;
-      top: 0;
-      left: -100%;
-      width: 200%;
-      height: 100%;
-      background: linear-gradient(90deg,
-        transparent 0%,
-        var(--primary-color) 50%,
-        transparent 100%
-      );
-      transition: transform 0.3s ease;
-      transform: translateX(0);
+    .relay-section:last-child {
+      margin-bottom: 0;
     }
 
-    .flowing .water-flow {
-      animation: flowWater 1s linear infinite;
-    }
-
-    @keyframes flowWater {
-      from { transform: translateX(-50%); }
-      to { transform: translateX(0%); }
-    }
-
-    .valve-btn {
-      width: clamp(60px, 15vw, 80px);
-      height: clamp(60px, 15vw, 80px);
-      border-radius: 50%;
+    .relay-btn {
+      width: 100%;
+      padding: 12px;
+      border-radius: 8px;
       border: none;
       background: var(--danger-color);
       color: var(--text-primary);
-      font-size: clamp(12px, 3vw, 14px);
+      font-size: clamp(14px, 3vw, 16px);
       cursor: pointer;
       transition: all 0.3s ease;
       box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
       display: flex;
       align-items: center;
       justify-content: center;
-      margin: 1rem auto;
-      padding: 0;
+      margin: 0.5rem 0;
     }
 
-    .valve-btn.on {
+    .relay-btn.on {
       background: var(--success-color);
     }
 
-    .valve-btn:hover {
-      transform: scale(1.1);
+    .relay-btn:hover {
+      transform: scale(1.02);
     }
 
-    .valve-btn:active {
-      transform: scale(0.95);
-    }
-
-    .valve-icon {
-      font-size: clamp(20px, 5vw, 24px);
-      margin-bottom: 5px;
+    .relay-btn:active {
+      transform: scale(0.98);
     }
 
     .status-section {
-      margin-top: 1rem;
+      margin-top: 0.5rem;
       padding: 0.5rem;
+      text-align: center;
     }
 
     .status-label {
       font-size: clamp(0.8rem, 2vw, 0.9rem);
       color: var(--text-secondary);
-      margin-bottom: 0.5rem;
+      margin-bottom: 0.25rem;
     }
 
     .status-value {
@@ -208,128 +181,255 @@ const char WEB_UI[] PROGMEM = R"rawliteral(
       transform: scale(0.95);
     }
 
+    /* Sensor Configuration Styles */
+    .sensor-section {
+      margin-top: 1.5rem;
+      padding: 1rem;
+      background: #2a2a2a;
+      border-radius: 10px;
+      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+    }
+
+    .sensor-container {
+      margin-top: 1.5rem;
+      padding: 1rem;
+      background: var(--card-background);
+      border-radius: 15px;
+      box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+    }
+
+    .sensor-card {
+      background: #2a2a2a;
+      border-radius: 10px;
+      padding: 1rem;
+      margin-bottom: 1rem;
+      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+    }
+
+    .sensor-value {
+      font-size: 1.2rem;
+      color: var(--primary-color);
+      margin: 0.5rem 0;
+    }
+
+    .sensor-field {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 1rem;
+      align-items: center;
+    }
+
+    .sensor-field select,
+    .sensor-field input {
+      padding: 8px;
+      border-radius: 4px;
+      border: 1px solid #444;
+      background: #333;
+      color: var(--text-primary);
+    }
+
+    .sensor-field select {
+      flex: 2;
+    }
+
+    .sensor-field input {
+      flex: 1;
+      width: 80px;
+    }
+
+    .add-sensor-btn,
+    .remove-sensor-btn {
+      padding: 5px 10px;
+      border-radius: 4px;
+      border: none;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .add-sensor-btn {
+      background: var(--primary-color);
+      color: white;
+    }
+
+    .remove-sensor-btn {
+      background: var(--danger-color);
+      color: white;
+    }
+
+    .sensor-readings {
+      margin-top: 1rem;
+      padding: 1rem;
+      background: #2a2a2a;
+      border-radius: 10px;
+    }
+
+    .sensor-reading {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 0.5rem;
+      padding: 0.5rem;
+      background: #333;
+      border-radius: 4px;
+    }
+
+    .sensor-value {
+      font-weight: bold;
+      color: var(--primary-color);
+    }
+
     /* Responsive and touch device adjustments */
     @media screen and (max-height: 500px) and (orientation: landscape) {
       .container { padding: 0.5rem; }
       h1 { font-size: clamp(1.2rem, 4vw, 1.5rem); padding: 0.5rem; }
-      .valve-container { padding: 1rem; }
+      .relay-container { padding: 1rem; }
       footer { padding: 0.5rem; margin-top: 1rem; }
     }
 
     @media (hover: none) {
-      .valve-btn:hover { transform: none; }
+      .relay-btn:hover { transform: none; }
     }
 
     @media screen and (min-width: 1200px) {
-      .valve-container { max-width: 500px; padding: 2.5rem; }
-      .pipe { height: 25px; }
+      .relay-container { max-width: 700px; padding: 2.5rem; }
     }
   </style>
 </head>
 <body>
-  <div id="connectionStatus" class="connection-status connection-offline">Disconnected</div>
-
-  <header>
-    <h1>Valve Control</h1>
-  </header>
-
+  <div id="connectionStatus" class="connection-status connection-offline">Offline</div>
+  <h1>Relay Control</h1>
+  
   <div class="container">
-    <div class="valve-container">
-      <div class="pipe">
-        <div class="water-flow" id="waterFlow"></div>
-      </div>
-
-      <button id="toggleButton" class="valve-btn" onclick="toggleValve()">
-        <div>
-          <span id="buttonText">...</span>
-        </div>
-      </button>
-
-      <div class="pipe">
-        <div class="water-flow" id="waterFlow2"></div>
-      </div>
-
-      <div class="status-section">
-        <div class="status-label">Valve Status</div>
-        <div class="status-value">
-          <span id="valveStatus">...</span>
-        </div>
-      </div>
+    <div class="relay-container" id="relayContainer">
+      <h2>Relays</h2>
+      <div id="relayButtons"></div>
     </div>
-
-    <div class="setup-section">
-      <button class="setup-btn" onclick="location.href='/enter-setup'">Enter Setup Mode</button>
+    
+    <div class="sensor-container" id="sensorContainer">
+      <h2>Sensors</h2>
+      <div id="sensorReadings"></div>
     </div>
   </div>
 
   <footer>
-    Irrigation Control System
+    <p>ESP8266 Relay Controller</p>
   </footer>
 
   <script>
-    const toggleButton = document.getElementById('toggleButton');
-    const buttonText = document.getElementById('buttonText');
-    const valveStatus = document.getElementById('valveStatus');
-    const pipes = document.querySelectorAll('.pipe');
-    const connectionStatus = document.getElementById('connectionStatus');
-
-    let socket;
-    let isOpen = false;
+    let socket = null;
+    const relayStates = [];
 
     function connectWebSocket() {
-      socket = new WebSocket(`ws://${window.location.hostname}:81`);
-
-      socket.onopen = function(e) {
-        connectionStatus.textContent = 'Connected';
-        connectionStatus.className = 'connection-status connection-online';
-        console.log('WebSocket connection established');
+      // Connect to WebSocket on port 81 (ESP8266 WebSocket default port)
+      socket = new WebSocket('ws://' + window.location.hostname + ':81');
+      
+      socket.onopen = () => {
+        document.getElementById('connectionStatus').className = 'connection-status connection-online';
+        document.getElementById('connectionStatus').textContent = 'Online';
+        console.log('WebSocket connected');
+      };
+      
+      socket.onclose = () => {
+        document.getElementById('connectionStatus').className = 'connection-status connection-offline';
+        document.getElementById('connectionStatus').textContent = 'Offline';
+        console.log('WebSocket disconnected, retrying...');
+        setTimeout(connectWebSocket, 2000);
       };
 
-      socket.onmessage = function(event) {
-        const status = event.data;
-        updateUI(status === 'ON');
+      socket.onerror = (error) => {
+        console.error('WebSocket error:', error);
       };
-
-      socket.onclose = function(event) {
-        connectionStatus.textContent = 'Disconnected';
-        connectionStatus.className = 'connection-status connection-offline';
-        console.log('WebSocket connection closed');
-        
-        // Attempt to reconnect after 5 seconds
-        setTimeout(connectWebSocket, 5000);
-      };
-
-      socket.onerror = function(error) {
-        console.error('WebSocket Error:', error);
+      
+      socket.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          console.log('Received:', data);
+          
+          if (data.type === 'relay') {
+            updateRelayState(data.index, data.state);
+          } else if (data.type === 'sensor') {
+            updateSensorReading(data);
+          }
+        } catch (e) {
+          console.error('Error processing message:', e);
+        }
       };
     }
 
-    function toggleValve() {
+    function updateRelayState(index, state) {
+      relayStates[index] = state;
+      const button = document.getElementById(`relay-${index}`);
+      if (button) {
+        button.className = `relay-btn ${state ? 'on' : ''}`;
+        button.textContent = `Relay ${index + 1}: ${state ? 'ON' : 'OFF'}`;
+      }
+    }
+
+    function toggleRelay(index) {
       if (!socket || socket.readyState !== WebSocket.OPEN) {
         alert('WebSocket not connected. Please check your connection.');
         return;
       }
 
-      const command = isOpen ? 'OFF' : 'ON';
-      socket.send(command);
+      const message = {
+        type: 'relay',
+        index: index,
+        state: !relayStates[index]
+      };
+
+      socket.send(JSON.stringify(message));
     }
 
-    function updateUI(open) {
-      isOpen = open;
+    function createRelayButtons() {
+      const container = document.getElementById('relayButtons');
+      container.innerHTML = '';
+
+      for (let i = 0; i < 4; i++) {
+        const button = document.createElement('button');
+        button.id = `relay-${i}`;
+        button.className = 'relay-btn';
+        button.textContent = `Relay ${i + 1}: OFF`;
+        button.onclick = () => toggleRelay(i);
+        container.appendChild(button);
+        relayStates[i] = false;
+      }
+    }
+
+    function updateSensorReading(data) {
+      const container = document.getElementById('sensorReadings');
+      let sensorCard = document.getElementById(`sensor-${data.index}`);
       
-      valveStatus.textContent = isOpen ? 'OPEN' : 'CLOSED';
-      valveStatus.className = isOpen ? 'status-value status-on' : 'status-value status-off';
+      if (!sensorCard) {
+        sensorCard = document.createElement('div');
+        sensorCard.id = `sensor-${data.index}`;
+        sensorCard.className = 'sensor-card';
+        container.appendChild(sensorCard);
+      }
 
-      toggleButton.className = `valve-btn ${isOpen ? 'on' : 'off'}`;
-      buttonText.textContent = isOpen ? 'OPEN' : 'CLOSED';
+      let html = `<h3>Sensor ${data.index + 1}</h3>`;
+      
+      if (data.temperature !== undefined) {
+        html += `<div class="sensor-value">Temperature: ${data.temperature.toFixed(1)}°C</div>`;
+      }
+      if (data.humidity !== undefined) {
+        html += `<div class="sensor-value">Humidity: ${data.humidity.toFixed(1)}%</div>`;
+      }
+      if (data.moisture !== undefined) {
+        html += `<div class="sensor-value">Moisture: ${data.moisture.toFixed(1)}%</div>`;
+      }
+      if (data.light !== undefined) {
+        html += `<div class="sensor-value">Light: ${data.light.toFixed(1)}</div>`;
+      }
+      if (data.analog !== undefined) {
+        html += `<div class="sensor-value">Analog: ${data.analog.toFixed(1)}</div>`;
+      }
 
-      pipes.forEach(pipe => {
-        pipe.className = `pipe ${isOpen ? 'flowing' : ''}`;
-      });
+      sensorCard.innerHTML = html;
     }
 
-    // Initial WebSocket connection
-    connectWebSocket();
+    window.onload = () => {
+      createRelayButtons();
+      connectWebSocket();
+    };
   </script>
 </body>
 </html>
@@ -402,6 +502,9 @@ const char SETUP_UI[] PROGMEM = R"rawliteral(
         .relay-sensor-fields {
             margin-top: 15px;
         }
+        .relay-pin-field {
+            margin-bottom: 10px;
+        }
     </style>
 </head>
 <body>
@@ -435,7 +538,7 @@ const char SETUP_UI[] PROGMEM = R"rawliteral(
         <div class="section">
             <h2>Relays</h2>
             <div id="relayFields" class="relay-sensor-fields">
-                <input type="number" name="relayCount" placeholder="Number of Relays (0-4)" min="0" max="4" value="0">
+                <input type="number" name="relayCount" id="relayCount" placeholder="Number of Relays (0-4)" min="0" max="4" value="0" onchange="updateRelayPins()">
                 <div id="relayPins"></div>
             </div>
         </div>
@@ -460,30 +563,46 @@ const char SETUP_UI[] PROGMEM = R"rawliteral(
 
     <script>
         let sensorCounts = { dht: 0, soil: 0, water: 0, ldr: 0, lm35: 0 };
-        
+
         function addSensorField() {
             const type = document.getElementById('sensorType').value;
             if (!type) return;
 
             const container = document.getElementById('sensorConfigs');
             const index = Object.values(sensorCounts).reduce((a,b) => a+b);
-            
+
             let html = `<div class="sensor-config">
                 <input type="hidden" name="sensor${index}_type" value="${type}">
                 <label>Sensor ${index + 1}:</label>`;
-            
+
             if (type === "1") {
                 html += `<select name="sensor${index}_dhtType">
                     <option value="11">DHT11</option>
                     <option value="22">DHT22</option>
                 </select>`;
             }
-            
+
             html += `<input type="number" name="sensor${index}_pin" placeholder="GPIO Pin" required>
                 <button type="button" onclick="this.parentElement.remove()">Remove</button>
             </div>`;
-            
+
             container.insertAdjacentHTML('beforeend', html);
+        }
+
+        function updateRelayPins() {
+            const relayCount = document.getElementById('relayCount').value;
+            const relayPinsContainer = document.getElementById('relayPins');
+            relayPinsContainer.innerHTML = '';
+
+            for (let i = 0; i < relayCount; i++) {
+                const pinField = document.createElement('div');
+                pinField.className = 'relay-pin-field';
+                pinField.innerHTML = `
+                    <label>Relay ${i + 1} Pin:</label>
+                    <input type="number" name="relayPin${i}" placeholder="GPIO Pin" required>
+                `;
+                relayPinsContainer.appendChild(pinField);
+            }
         }
     </script>
 </body>

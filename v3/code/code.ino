@@ -5,8 +5,10 @@
 #include <EEPROM.h>
 #include <DNSServer.h>
 #include <AdafruitIO_WiFi.h>
+#include <DHT.h>
 #include "UI.h"
 
+// Constants
 #define LED_BLINK_INTERVAL 200
 #define LED_PATTERN_PAUSE 1000
 #define QUICK_BLINK_INTERVAL 100
@@ -20,23 +22,6 @@
 #define IO_CONNECTING_PATTERN 3
 #define RESET_PATTERN 10
 
-struct DeviceConfig {
-  char wifiSSID[32];
-  char wifiPassword[64];
-  char mdnsName[32];
-  bool useAdafruitIO;
-  char ioUsername[32];
-  char ioKey[64];
-  char relayFeedName[32];
-  char ipFeedName[32];
-  uint8_t configVersion;
-  bool savedDeviceState;
-  uint8_t relayPins[8];  // Array to store relay pins
-  uint8_t sensorPins[8]; // Array to store sensor pins
-  uint8_t relayCount;    // Number of relays
-  uint8_t sensorCount;   // Number of sensors
-};
-
 #define RELAY_PIN 0
 #define LED_PIN 1
 #define CONFIG_ADDRESS 0
@@ -48,22 +33,47 @@ const byte DNS_PORT = 53;
 #define WIFI_RETRY_INTERVAL 30000
 #define MAX_WIFI_CONNECT_ATTEMPTS 5
 
-enum LedPattern {
-  PATTERN_NONE = 0,
-  PATTERN_SETUP_MODE = 1,
-  PATTERN_SUCCESS = 2,
-  PATTERN_ERROR = 3,
-  PATTERN_WIFI_CONNECTING = 4,
-  PATTERN_IO_CONNECTING = 5,
-  PATTERN_RESET = 6,
-  PATTERN_ACTIVE = 7,
-  PATTERN_IDLE = 8
+#define MAX_RELAYS 4
+#define MAX_SENSORS 6
+#define SENSOR_UPDATE_INTERVAL 5000
+#define IP_UPDATE_INTERVAL 5 * 60 * 1000 // 5 minutes
+
+// Sensor Types
+enum SensorType {
+  SENSOR_NONE,
+  SENSOR_DHT,
+  SENSOR_SOIL,
+  SENSOR_WATER,
+  SENSOR_LDR,
+  SENSOR_LM35
 };
 
-unsigned long lastIPUpdateTime = 0;
-const unsigned long IP_UPDATE_INTERVAL = 5 * 60 * 1000;
+// Sensor Configuration
+struct SensorConfig {
+  SensorType type;
+  uint8_t pin;
+  uint8_t dhtType; // Only for DHT (11 or 22)
+};
 
-bool deviceState = false;
+// Device Configuration
+struct DeviceConfig {
+  char wifiSSID[32];
+  char wifiPassword[64];
+  char mdnsName[32];
+  bool useAdafruitIO;
+  char ioUsername[32];
+  char ioKey[64];
+  char relayFeedName[32];
+  char ipFeedName[32];
+  uint8_t configVersion;
+  bool savedDeviceState;
+  uint8_t relayPins[MAX_RELAYS];
+  SensorConfig sensors[MAX_SENSORS];
+  uint8_t relayCount;
+  uint8_t sensorCount;
+};
+
+// Global Variables
 DeviceConfig config;
 ESP8266WebServer server(80);
 DNSServer dnsServer;
@@ -84,6 +94,53 @@ int currentPattern = 0;
 unsigned long currentBlinkInterval = LED_BLINK_INTERVAL;
 bool patternRepeating = false;
 
+unsigned long lastSensorUpdate = 0;
+unsigned long lastIPUpdateTime = 0;
+DHT* dhtSensors[MAX_SENSORS];
+
+// Declare deviceState as a global variable
+bool deviceState = false;
+
+// LED Patterns
+enum LedPattern {
+  PATTERN_NONE = 0,
+  PATTERN_SETUP_MODE = 1,
+  PATTERN_SUCCESS = 2,
+  PATTERN_ERROR = 3,
+  PATTERN_WIFI_CONNECTING = 4,
+  PATTERN_IO_CONNECTING = 5,
+  PATTERN_RESET = 6,
+  PATTERN_ACTIVE = 7,
+  PATTERN_IDLE = 8
+};
+
+// Function Prototypes
+void updateLedPattern();
+void handleRepeatingPattern(int blinkCount);
+void handleSinglePattern(int blinkCount);
+void handleBreathingEffect();
+void startLedPattern(LedPattern pattern);
+void saveConfig();
+void loadConfig();
+void startCaptivePortal();
+bool attemptWiFiConnection();
+void checkWiFiConnection();
+void setupMDNS();
+void setupAdafruitIO();
+void sendIPToAdafruitIO();
+void handleSetup();
+void handleNotFound();
+void handleSetupMode();
+void handleSaveConfig();
+void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length);
+void setDeviceState(bool isOn);
+void saveDeviceState(bool isOn);
+void broadcastStatus(bool isOn);
+void handleRelayFeed(AdafruitIO_Data *data);
+void initializeSensors();
+void readSensors();
+
+// LED Pattern Handling
 void updateLedPattern() {
   unsigned long currentMillis = millis();
 
@@ -207,6 +264,7 @@ void startLedPattern(LedPattern pattern) {
   digitalWrite(LED_PIN, HIGH);
 }
 
+// Configuration Handling
 void saveConfig() {
   config.savedDeviceState = deviceState;
   config.configVersion = 42;
@@ -226,12 +284,15 @@ void loadConfig() {
     strcpy(config.ipFeedName, "ip");
     config.useAdafruitIO = false;
     config.savedDeviceState = false;
+    config.relayCount = 0;
+    config.sensorCount = 0;
     saveConfig();
   }
 
   setDeviceState(config.savedDeviceState);
 }
 
+// WiFi and Setup Mode
 void startCaptivePortal() {
   WiFi.mode(WIFI_AP);
   WiFi.softAP(AP_SSID, AP_PASSWORD);
@@ -241,6 +302,7 @@ void startCaptivePortal() {
   server.on("/", handleSetup);
   server.on("/setup", handleSetup);
   server.on("/save-config", HTTP_POST, handleSaveConfig);
+  server.on("/enter-setup", handleSetupMode);
   server.onNotFound(handleNotFound);
   server.begin();
 
@@ -294,6 +356,7 @@ void checkWiFiConnection() {
   }
 }
 
+// mDNS and Adafruit IO
 void setupMDNS() {
   if (MDNS.begin(config.mdnsName)) {
     startLedPattern(PATTERN_SUCCESS);
@@ -357,6 +420,7 @@ void sendIPToAdafruitIO() {
   }
 }
 
+// Web Server Handlers
 void handleSetup() {
   server.send_P(200, "text/html", SETUP_UI);
 }
@@ -364,6 +428,12 @@ void handleSetup() {
 void handleNotFound() {
   server.sendHeader("Location", String("/"), true);
   server.send(302, "text/plain", "");
+}
+
+void handleSetupMode() {
+  server.send(200, "text/plain", "Entering setup mode...");
+  delay(1000);
+  ESP.restart();
 }
 
 void handleSaveConfig() {
@@ -385,9 +455,17 @@ void handleSaveConfig() {
     config.relayPins[i] = server.arg("relayPin" + String(i)).toInt();
   }
 
-  config.sensorCount = server.arg("sensorCount").toInt();
-  for (int i = 0; i < config.sensorCount; i++) {
-    config.sensorPins[i] = server.arg("sensorPin" + String(i)).toInt();
+  config.sensorCount = 0;
+  for (int i = 0; i < MAX_SENSORS; i++) {
+    String sensorType = server.arg("sensor" + String(i) + "_type");
+    if (sensorType.length() > 0) {
+      config.sensors[config.sensorCount].type = static_cast<SensorType>(sensorType.toInt());
+      config.sensors[config.sensorCount].pin = server.arg("sensor" + String(i) + "_pin").toInt();
+      if (config.sensors[config.sensorCount].type == SENSOR_DHT) {
+        config.sensors[config.sensorCount].dhtType = server.arg("sensor" + String(i) + "_dhtType").toInt();
+      }
+      config.sensorCount++;
+    }
   }
 
   saveConfig();
@@ -398,6 +476,7 @@ void handleSaveConfig() {
   ESP.restart();
 }
 
+// WebSocket Event Handler
 void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length) {
   switch(type) {
     case WStype_CONNECTED:
@@ -419,6 +498,7 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length
   }
 }
 
+// Device State Management
 void setDeviceState(bool isOn) {
   deviceState = isOn;
   for (int i = 0; i < config.relayCount; i++) {
@@ -458,8 +538,40 @@ void handleRelayFeed(AdafruitIO_Data *data) {
   }
 }
 
+// Sensor Initialization and Reading
+void initializeSensors() {
+  for (int i = 0; i < config.sensorCount; i++) {
+    if (config.sensors[i].type == SENSOR_DHT) {
+      dhtSensors[i] = new DHT(config.sensors[i].pin, config.sensors[i].dhtType);
+      dhtSensors[i]->begin();
+    }
+    // Initialize other sensor types as needed
+  }
+}
+
+void readSensors() {
+  if (millis() - lastSensorUpdate > SENSOR_UPDATE_INTERVAL) {
+    for (int i = 0; i < config.sensorCount; i++) {
+      switch(config.sensors[i].type) {
+        case SENSOR_DHT:
+          if (dhtSensors[i]) {
+            float h = dhtSensors[i]->readHumidity();
+            float t = dhtSensors[i]->readTemperature();
+            // Send via WebSocket
+          }
+          break;
+        case SENSOR_SOIL:
+          // Read analog pin
+          break;
+        // ... handle other sensor types ...
+      }
+    }
+    lastSensorUpdate = millis();
+  }
+}
+
+// Setup and Loop
 void setup() {
-  pinMode(RELAY_PIN, OUTPUT);
   pinMode(LED_PIN, OUTPUT);
 
   loadConfig();
@@ -470,10 +582,8 @@ void setup() {
     digitalWrite(config.relayPins[i], HIGH); // Turn off relays initially
   }
 
-  // Initialize sensor pins
-  for (int i = 0; i < config.sensorCount; i++) {
-    pinMode(config.sensorPins[i], INPUT);
-  }
+  // Initialize sensors
+  initializeSensors();
 
   WiFi.persistent(true);
   WiFi.setAutoConnect(true);
@@ -527,9 +637,6 @@ void loop() {
     MDNS.update();
 
     // Read sensor data
-    for (int i = 0; i < config.sensorCount; i++) {
-      int sensorValue = digitalRead(config.sensorPins[i]);
-      // Handle sensor value (e.g., send over WebSocket)
-    }
+    readSensors();
   }
 }
